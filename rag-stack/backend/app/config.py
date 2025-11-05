@@ -14,8 +14,15 @@ DATA_DIR = BASE_DIR.parent / "data"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=str(BASE_DIR.parent.parent / ".env"), env_file_encoding="utf-8", case_sensitive=False)
 
-    anthropic_api_key: str = Field(alias="ANTHROPIC_API_KEY")
+    anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
     claude_model: str = Field(default="claude-3-5-sonnet-20241022", alias="CLAUDE_MODEL")
+    openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
+    openai_model: str = Field(default="gpt-4o-mini", alias="OPENAI_MODEL")
+    default_llm_provider: str = Field(default="claude", alias="DEFAULT_LLM_PROVIDER")
+    claude_input_cost_per_1k: float = Field(default=0.003, alias="CLAUDE_INPUT_COST_PER_1K")
+    claude_output_cost_per_1k: float = Field(default=0.015, alias="CLAUDE_OUTPUT_COST_PER_1K")
+    openai_input_cost_per_1k: float = Field(default=0.005, alias="OPENAI_INPUT_COST_PER_1K")
+    openai_output_cost_per_1k: float = Field(default=0.015, alias="OPENAI_OUTPUT_COST_PER_1K")
     embeddings_provider: str = Field(default="sentence-transformers", alias="EMBEDDINGS_PROVIDER")
     embeddings_model: str = Field(default="BAAI/bge-m3", alias="EMBEDDINGS_MODEL")
     database_url: str = Field(alias="DATABASE_URL")

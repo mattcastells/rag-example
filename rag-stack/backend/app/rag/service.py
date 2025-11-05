@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import Settings
 from ..models import RagChunk
-from .clients import ClaudeClient, ClaudeMessage, get_claude_client
+from .clients import (
+    ClaudeClient,
+    CompletionMessage,
+    OpenAIClient,
+    get_claude_client,
+    get_openai_client,
+)
 from .embeddings import EmbeddingProvider
 from .prompt import build_prompt
 from .retriever import RetrievedChunk, Retriever
@@ -30,13 +36,14 @@ class RAGService:
         embeddings: EmbeddingProvider,
         retriever: Retriever,
         reranker: Reranker | None = None,
-        client: ClaudeClient | None = None,
+        client: ClaudeClient | OpenAIClient | None = None,
     ) -> None:
         self.settings = settings
         self.embeddings = embeddings
         self.retriever = retriever
         self.reranker = reranker
-        self.client = client or get_claude_client(settings)
+        self._client_override = client
+        self._clients: dict[str, ClaudeClient | OpenAIClient] = {}
 
     async def ask(
         self,
@@ -46,6 +53,7 @@ class RAGService:
         repo: str | None = None,
         tag: str | None = None,
         acl: Sequence[str] | None = None,
+        provider: str | None = None,
     ) -> AskResult:
         timings: dict[str, float] = {}
         start = time.perf_counter()
@@ -86,14 +94,16 @@ class RAGService:
 
         prompt = build_prompt(self.settings, question, chunks)
         gen_start = time.perf_counter()
-        completion: ClaudeMessage = await self.client.complete(prompt)
+        client = self._get_client(provider)
+        completion: CompletionMessage = await client.complete(prompt)
         timings["generation"] = time.perf_counter() - gen_start
 
         usage = completion.usage
         input_tokens = usage.get("input_tokens") or 0
         output_tokens = usage.get("output_tokens") or 0
-        estimated_cost = ((input_tokens / 1_000) * 0.003 + (output_tokens / 1_000) * 0.015)
-        usage["estimated_cost_usd"] = round(estimated_cost, 6)
+        estimated_cost = self._estimate_cost(provider, input_tokens, output_tokens)
+        if estimated_cost is not None:
+            usage["estimated_cost_usd"] = round(estimated_cost, 6)
 
         sources = []
         for chunk, score in zip(chunks, scores):
@@ -116,3 +126,31 @@ class RAGService:
             chunk.embedding = embedding
             session.add(chunk)
         await session.commit()
+
+    def _get_client(self, provider: str | None) -> ClaudeClient | OpenAIClient:
+        if self._client_override:
+            return self._client_override
+
+        selected = (provider or self.settings.default_llm_provider).lower()
+        if selected not in self._clients:
+            if selected == "claude":
+                self._clients[selected] = get_claude_client(self.settings)
+            elif selected == "openai":
+                self._clients[selected] = get_openai_client(self.settings)
+            else:
+                raise ValueError(f"Proveedor LLM desconocido: {selected}")
+        return self._clients[selected]
+
+    def _estimate_cost(self, provider: str | None, input_tokens: int, output_tokens: int) -> float | None:
+        selected = (provider or self.settings.default_llm_provider).lower()
+        if selected == "claude":
+            return (
+                (input_tokens / 1_000) * self.settings.claude_input_cost_per_1k
+                + (output_tokens / 1_000) * self.settings.claude_output_cost_per_1k
+            )
+        if selected == "openai":
+            return (
+                (input_tokens / 1_000) * self.settings.openai_input_cost_per_1k
+                + (output_tokens / 1_000) * self.settings.openai_output_cost_per_1k
+            )
+        return None

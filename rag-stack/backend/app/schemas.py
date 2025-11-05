@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -21,12 +22,18 @@ class IngestResult(BaseModel):
     failed: int
 
 
+class LLMProvider(str, Enum):
+    claude = "claude"
+    openai = "openai"
+
+
 class AskRequest(BaseModel):
     q: str
     k: int = 8
     repo: Optional[str] = None
     tag: Optional[str] = None
     acl: Optional[List[str]] = None
+    provider: Optional[LLMProvider] = None
 
 
 class SourceDocument(BaseModel):
