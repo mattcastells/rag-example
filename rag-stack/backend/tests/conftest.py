@@ -57,9 +57,9 @@ class StubEmbeddings:
 
 class StubClient:
     async def complete(self, prompt):
-        from app.rag.clients import ClaudeMessage
+        from app.rag.clients import CompletionMessage
 
-        return ClaudeMessage(text="respuesta", usage={"input_tokens": 10, "output_tokens": 20})
+        return CompletionMessage(text="respuesta", usage={"input_tokens": 10, "output_tokens": 20})
 
 
 @pytest.fixture

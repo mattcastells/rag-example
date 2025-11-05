@@ -9,7 +9,7 @@ Repositorio monorepo que expone un servicio Retrieval Augmented Generation (RAG)
 - **Vector store** en Postgres con extensión `pgvector` y migraciones administradas con Alembic.
 - **Embeddings** multilingües con `sentence-transformers` (BAAI/bge-m3) con interfaz extensible.
 - **Retriever** con filtros por metadatos y ACL. Opcionalmente híbrido con BM25 y re-rankers BAAI.
-- **LLM** de respuesta usando el SDK oficial de Anthropic (`claude-3-5-sonnet` por defecto).
+- **LLM** de respuesta usando los SDK oficiales de Anthropic (Claude) u OpenAI (ChatGPT), seleccionable por request.
 - **Observabilidad**: logs estructurados, latencias y estimación de costos.
 - **Docker Compose** para ambiente reproducible y Makefile para tareas comunes.
 
@@ -25,7 +25,7 @@ Repositorio monorepo que expone un servicio Retrieval Augmented Generation (RAG)
 
    ```bash
    cp .env.example .env
-   # Editar .env y colocar ANTHROPIC_API_KEY
+   # Editar .env y colocar ANTHROPIC_API_KEY y/o OPENAI_API_KEY
    ```
 
 2. Levantar los servicios y aplicar migraciones:
@@ -41,11 +41,19 @@ Repositorio monorepo que expone un servicio Retrieval Augmented Generation (RAG)
    make ingest-local
    ```
 
-4. Probar la API:
+4. Probar la API (Claude por defecto):
 
    ```bash
    curl -H "x-api-key: dev-key" "http://localhost:8000/ask?q=Cómo%20configurar%20el%20pipeline&repo=company&tag=v1&k=8"
    ```
+
+   Para usar OpenAI en una petición específica agrega `provider=openai`:
+
+   ```bash
+   curl -H "x-api-key: dev-key" "http://localhost:8000/ask?q=Cómo%20configurar%20el%20pipeline&repo=company&tag=v1&k=8&provider=openai"
+   ```
+
+   En el cuerpo de un POST utiliza `{"provider": "openai"}` dentro del JSON.
 
 ## Arquitectura
 
@@ -62,8 +70,15 @@ Repositorio monorepo que expone un servicio Retrieval Augmented Generation (RAG)
 1. **Ingesta**: los documentos se cargan desde disco o vía API, se convierten a texto, se fragmentan en chunks (800 tokens, overlap 120) y se generan embeddings con `BAAI/bge-m3`.
 2. **Almacenamiento**: los chunks se guardan en `rag_chunks` con metadatos, ACL y embeddings en Postgres/pgvector.
 3. **Consulta**: `/ask` aplica filtros por repo, tag y ACL, ejecuta búsqueda vectorial (más híbrido opcional) y re-ranking configurable.
-4. **Generación**: se construye un prompt controlado y se invoca Claude via SDK oficial.
+4. **Generación**: se construye un prompt controlado y se invoca el LLM configurado (Claude u OpenAI) vía sus SDKs oficiales.
 5. **Respuesta**: se retorna texto sintetizado con citas a las fuentes relevantes.
+
+## Selección de proveedor LLM
+
+- Define el proveedor por defecto en `.env` con `DEFAULT_LLM_PROVIDER` (`claude` u `openai`).
+- Configura las credenciales correspondientes (`ANTHROPIC_API_KEY` y/o `OPENAI_API_KEY`).
+- Sobrescribe el proveedor por request usando el query param `provider` (GET) o el campo JSON `provider` (POST) en el endpoint `/ask`.
+- Los costos estimados se calculan según los valores configurados en las variables `*_COST_PER_1K`.
 
 ## Observabilidad y seguridad
 

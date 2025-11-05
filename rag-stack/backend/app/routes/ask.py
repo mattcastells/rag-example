@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_api_key
 from ..deps import get_rag_service, get_session
-from ..schemas import AskRequest, AskResponse
+from ..schemas import AskRequest, AskResponse, LLMProvider
 
 router = APIRouter(prefix="/ask", tags=["ask"], dependencies=[Depends(require_api_key)])
 
@@ -24,10 +24,19 @@ async def ask_get(
     tag: Optional[str] = Query(None),
     acl: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_session),
+    provider: Optional[LLMProvider] = Query(None),
 ):
     rag_service = await get_rag_service()
     acl_list = [scope.strip() for scope in acl.split(",") if scope.strip()] if acl else None
-    result = await rag_service.ask(session, question=q, k=k, repo=repo, tag=tag, acl=acl_list)
+    result = await rag_service.ask(
+        session,
+        question=q,
+        k=k,
+        repo=repo,
+        tag=tag,
+        acl=acl_list,
+        provider=provider.value if provider else None,
+    )
     return _build_response(result)
 
 
@@ -44,5 +53,6 @@ async def ask_post(
         repo=request.repo,
         tag=request.tag,
         acl=request.acl,
+        provider=request.provider.value if request.provider else None,
     )
     return _build_response(result)
